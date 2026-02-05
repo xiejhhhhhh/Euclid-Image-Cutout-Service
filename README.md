@@ -47,7 +47,7 @@ PERMANENT_DOWNLOAD_DIR = '/data/home/xiejh/Euclid_download/'  # Band cache direc
 python Euclid_flash_app.py
 ```
 
-The service runs by default at http://localhost:5000
+The service runs by default at [(https://nadc.china-vo.org/mwr/euclid-imagecutout/)]
 
 ## Frontend Usage Guide
 
