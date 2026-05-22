@@ -243,3 +243,16 @@ GET /api/task_status?task_id=任务ID
 ## 技术支持
 
 如有任何问题或建议，请联系系统管理员。
+<div align="center">
+
+[![Python 3.6+](https://img.shields.io/badge/Python-3.6%2B-3776AB?style=flat-square&logo=python&logoColor=white)](./requirements.txt)
+[![Flask](https://img.shields.io/badge/Flask-Web%20Service-000000?style=flat-square&logo=flask&logoColor=white)](#)
+[![FITS](https://img.shields.io/badge/FITS-Astronomy%20Catalog-5C4D7D?style=flat-square)](#)
+[![Euclid Q1](https://img.shields.io/badge/Euclid-Q1-3A506B?style=flat-square)](#)
+[![Batch Cutout](https://img.shields.io/badge/Batch-Image%20Cutout-4C956C?style=flat-square)](#)
+[![Parallel Processing](https://img.shields.io/badge/Parallel-Processing-E07A5F?style=flat-square)](#)
+[![Online Service](https://img.shields.io/badge/NADC-Online%20Service-1D7874?style=flat-square)](https://nadc.china-vo.org/mwr/euclid-imagecutout/)
+
+[English](./README.md) | [中文](./README_CN.md)
+
+</div>
