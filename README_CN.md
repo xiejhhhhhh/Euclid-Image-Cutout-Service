@@ -8,175 +8,313 @@
 [![Parallel Processing](https://img.shields.io/badge/Parallel-Processing-E07A5F?style=flat-square)](#)
 [![Online Service](https://img.shields.io/badge/NADC-Online%20Service-1D7874?style=flat-square)](https://nadc.china-vo.org/mwr/euclid-imagecutout/)
 
-# Euclid 图像裁剪服务使用指南
+# Euclid 图像切割服务使用指南
 
 [English](./README.md) | [中文](./README_CN.md)
 
 </div>
 
-## 项目概览
+## 项目概述
 
-Euclid 图像裁剪服务是一个基于 Flask 的 Web 应用，用于从 Euclid 及其他天文数据集中批量裁剪天体图像。该服务支持上传 FITS 格式星表，根据指定坐标和参数自动裁剪图像，并提供波段缓存机制以提高处理效率。
+Euclid Image Cutout Service 是一个基于 Flask 的 Web 应用，用于从 Euclid Q1 等天文数据集中批量裁剪目标天体图像。用户上传包含天体坐标的 FITS 星表后，服务会根据所选仪器、波段、文件类型和裁剪尺寸自动执行切图任务，并提供任务状态跟踪、结果下载和波段缓存能力。
 
-相关工作已经整理为在线 Web 工具，用户无需本地部署即可直接使用。服务默认运行地址为：
-[(https://nadc.china-vo.org/mwr/euclid-imagecutout/)](https://nadc.china-vo.org/mwr/euclid-imagecutout/)
+本仓库对应的在线服务已经部署在国家天文科学数据中心平台：
 
-主要功能：
+<https://nadc.china-vo.org/mwr/euclid-imagecutout/>
+
+主要功能包括：
+
 - 批量上传 FITS 星表并处理多个天体目标
-- 支持多种天文仪器与波段选择
-- 可选择多种裁剪文件类型（BGSUB、FLAG、BGMOD 等）
-- 通过波段缓存机制避免重复处理相同目标
-- 支持任务状态跟踪与结果下载
-- 支持并行处理以提高效率
+- 支持 Euclid 及相关巡天数据的多仪器、多波段选择
+- 支持 BGSUB、CATALOG-PSF、FLAG、BGMOD、RMS 等文件类型
+- 支持波段缓存，避免对相同目标重复切图
+- 支持任务进度查询和 ZIP 结果下载
+- 支持并行处理以提升批量任务效率
 
-## 安装说明
+## Euclid 原始数据获取流程
+
+### 方式一：Euclid 官方数据发布页面
+
+Euclid Q1 数据可以从 Euclid 官方数据发布页面获取：
+
+<https://www.cosmos.esa.int/web/euclid/euclid-q1-data-release>
+
+该入口适合了解 Euclid Q1 数据发布背景、官方说明、数据产品类型和引用信息。
+
+### 方式二：国家天文科学数据中心科学平台
+
+国内用户也可以通过国家天文科学数据中心科学平台访问 Euclid 原始数据：
+
+<https://science.china-vo.org/>
+
+在平台中搜索或进入 Euclid 相关数据集后，可以看到 Euclid 原始数据资源。
+
+![Euclid 数据集入口](./docs/assets/euclid-workflow/nadc-euclid-dataset-entry.png)
+
+![Euclid FITS 文件列表](./docs/assets/euclid-workflow/nadc-euclid-file-list.png)
+
+进入数据集页面后，点击“使用”，创建新的应用。平台会自动将数据挂载到用户自己的工作目录中，通常位于：
+
+```text
+dataset/
+```
+
+![创建应用并挂载数据](./docs/assets/euclid-workflow/nadc-create-application.png)
+
+挂载后的 `dataset/` 目录中包含对应的 Euclid FITS 文件，可以直接在平台的 Linux 环境中读取，也可以从 Windows 端通过 SFTP 方式远程读取。
+
+## Euclid 原始图像读取
+
+Euclid 原始图像通常以 FITS 文件形式存储。读取 FITS 文件时推荐使用 `astropy.io.fits`。如果数据位于远程 Linux 服务器，可以在 Windows 环境中通过 `paramiko` 建立 SFTP 连接读取；如果代码直接运行在数据所在的 Linux 环境中，则可以直接读取本地路径。
+
+### Windows 读取 Linux 服务器数据
+
+```python
+import io
+
+import paramiko
+from astropy.io import fits
+
+hostname = "你的 Linux 服务器 IP"
+host_port = 端口号
+username = "用户名"
+password = "密码"
+remote_path = "服务器上数据路径，可批量读取"
+
+transport = paramiko.Transport((hostname, host_port))
+transport.connect(username=username, password=password)
+
+sftp = paramiko.SFTPClient.from_transport(transport)
+with sftp.open(remote_path, "rb") as f:
+    file_content = f.read()
+
+hdul = fits.open(io.BytesIO(file_content))
+data = hdul[0].data
+print(data.shape)
+
+hdul.close()
+sftp.close()
+transport.close()
+```
+
+### Linux 环境直接读取 FITS
+
+```python
+from astropy.io import fits
+
+file_path = "服务器路径"
+
+hdul = fits.open(file_path)
+data = hdul[0].data
+print(data.shape)
+hdul.close()
+```
+
+读取成功后，可以通过 `data.shape` 检查图像数组维度。
+
+![FITS 数据 shape 输出示例](./docs/assets/euclid-workflow/fits-data-shape-output.png)
+
+## Euclid 原始图像可视化
+
+大型 FITS 图像通常体积较大，直接显示会消耗较多内存。建议先从 FITS 的不同 HDU 中寻找二维数值图像数据，再进行降采样、异常值处理和灰度图显示。
+
+```python
+from astropy.io import fits
+import matplotlib.pyplot as plt
+import numpy as np
+
+file_path = (
+    "/data/home/XXXXX/dataset/102042/MER/102018667/DECAM/"
+    "EUC_MER_BGSUB-MOSAIC-DES-G_TILE102018667-290101_"
+    "20241018T151030.012482Z_00.00.fits"
+)
+
+hdul = fits.open(file_path, memmap=True)
+
+data = None
+for i, hdu in enumerate(hdul):
+    if hdu.data is not None:
+        if hasattr(hdu.data, "dtype") and hdu.data.dtype.kind in "uifc":
+            if len(hdu.data.shape) >= 2:
+                data = hdu.data
+                print(f"找到图像数据在 HDU {i}, shape={data.shape}")
+                break
+
+if data is None:
+    print("未找到合适的图像数据，尝试转换...")
+    if hdul[0].data is not None and hdul[0].data.dtype == object:
+        data = np.array(hdul[0].data.tolist(), dtype=np.float32)
+        print(f"转换后的数据形状: {data.shape}")
+
+if data is not None:
+    downsample_factor = 10
+
+    if data.ndim > 2:
+        data = data[0]
+
+    print(f"原始图像形状: {data.shape}")
+
+    data_small = data[::downsample_factor, ::downsample_factor]
+    print(f"降采样后图像形状: {data_small.shape}")
+
+    data_small = np.array(data_small, dtype=np.float32)
+    data_small = np.nan_to_num(data_small, nan=0.0, posinf=0.0, neginf=0.0)
+
+    vmin, vmax = np.percentile(data_small, (2, 98))
+
+    plt.figure(figsize=(10, 8))
+    plt.imshow(
+        data_small,
+        cmap="gray",
+        origin="lower",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    plt.colorbar(label="Intensity")
+    plt.title(f"Downsampled FITS Image, factor={downsample_factor}")
+    plt.xlabel("X Pixel")
+    plt.ylabel("Y Pixel")
+    plt.show()
+else:
+    print("无法读取图像数据")
+
+hdul.close()
+```
+
+这段代码的处理逻辑是：
+
+1. 遍历 FITS 文件中的 HDU，寻找可用于显示的二维数值图像数据。
+2. 对高维数据取第一个二维切片。
+3. 使用固定倍数降采样，降低内存占用和渲染压力。
+4. 将异常值、`NaN` 和无穷值转换为可显示数值。
+5. 使用 2% 到 98% 分位数作为显示范围，提升图像对比度。
+
+## Euclid 原始图像切割服务
+
+本仓库整理的服务用于将 Euclid 原始 FITS 图像按目标坐标批量切割。用户不需要在本地部署完整数据集，可以直接访问在线服务：
+
+<https://nadc.china-vo.org/mwr/euclid-imagecutout/>
+
+服务的典型使用流程如下：
+
+1. 上传 FITS 格式星表。
+2. 指定 RA 和 DEC 列名，默认列名为 `RA` 和 `DEC`。
+3. 选择文件类型，例如 `BGSUB`、`CATALOG-PSF`、`FLAG`、`BGMOD`、`RMS`。
+4. 选择仪器，例如 `VIS`、`NISP`、`DECAM`、`HSC`、`GPC`、`MEGACAM`。
+5. 根据仪器选择可用波段。
+6. 设置并行处理线程数，默认值为 4。
+7. 提交任务，等待处理完成后下载 ZIP 结果。
+
+## 本地部署说明
 
 ### 环境要求
 
-- **操作系统**：Linux（推荐 Ubuntu 18.04+）
-- **Python**：3.6+
-- **依赖包**：见 `requirements.txt`
-- **数据要求**：服务器中需预置 Euclid Q1 数据集
-- **NADC 平台支持**：感谢国家天文科学数据中心（NADC）的平台支持
+- 操作系统：Linux，推荐 Ubuntu 18.04+
+- Python：3.6+
+- 依赖：见 [requirements.txt](./requirements.txt)
+- 数据要求：服务器需要预置或挂载 Euclid Q1 数据集
+- 平台支持：感谢国家天文科学数据中心提供平台支持
 
 ### 安装步骤
 
-1. 克隆或下载项目代码
+1. 克隆或下载项目代码。
 
-2. 安装依赖
+2. 安装依赖：
+
 ```bash
 pip install -r requirements.txt
 ```
 
-3. 配置数据路径
+3. 配置数据路径。
 
-在 `Euclid_flash_app.py` 中配置如下路径：
+在 [Euclid_flash_app.py](./Euclid_flash_app.py) 中配置以下路径：
+
 ```python
-DATA_ROOT = Path("/data/astrodata/mirror/102042-Euclid-Q1")  # Euclid 数据根目录
-UPLOAD_DIR = '/data/home/xiejh/app_data/'  # 用户文件上传目录
-PERMANENT_DOWNLOAD_DIR = '/data/home/xiejh/Euclid_download/'  # 波段缓存目录
+DATA_ROOT = Path("/data/astrodata/mirror/102042-Euclid-Q1")
+UPLOAD_DIR = "/data/home/xiejh/app_data/"
+PERMANENT_DOWNLOAD_DIR = "/data/home/xiejh/Euclid_download/"
 ```
 
-4. 启动服务
+4. 启动服务：
+
 ```bash
 python Euclid_flash_app.py
 ```
 
-## 前端使用指南
-
-### 1. 上传星表
-
-1. 点击 “Select Catalog File” 按钮上传 FITS 格式星表文件（最大支持 10,000 行）
-2. 确认赤经（RA）和赤纬（DEC）列名设置正确（默认分别为 “RA” 和 “DEC”）
-3. 点击 “Upload File” 按钮并等待文件上传完成
-
-### 2. 配置裁剪参数
-
-1. **文件类型**：选择需要裁剪的文件类型
-   - BGSUB（背景减除图像）- 默认选中
-   - CATALOG-PSF（PSF 星表）- 默认选中
-   - FLAG（标记文件）
-   - BGMOD（背景模型）
-   - RMS（均方根文件）
-
-2. **仪器选择**：选择一个天文仪器（单选）
-   - VIS（可见光仪器）- 默认选中
-   - NISP（近红外成像/光谱仪）
-   - DECAM（暗能量相机）
-   - HSC（Hyper Suprime-Cam）
-   - GPC（Gigapixel Camera）
-   - MEGACAM（MegaPrime Camera）
-
-3. **波段选择**：系统会根据所选仪器自动显示可用波段，支持多选
-
-4. **并行工作数**：设置并行处理线程数（默认 4，范围 1-16）
-
-### 3. 提交与管理任务
-
-1. 点击 “Submit Task” 按钮开始处理
-2. 在 “Task List” 中查看任务状态
-3. 任务完成后点击 “Download Results” 下载 ZIP 格式裁剪结果
-
 ## 星表格式要求
 
-### 支持的文件格式
+当前服务只支持上传 FITS 格式星表。星表必须包含坐标列，或包含可通过界面手动指定的坐标列。
 
-仅支持 FITS 格式星表文件。
+必需列：
 
-### 必需列信息
+- `RA`：天体赤经，单位为十进制度
+- `DEC`：天体赤纬，单位为十进制度
 
-星表必须包含以下列，或包含可通过界面配置指定的对应列：
+可选列：
 
-1. **Right Ascension (RA)**：天体赤经坐标，单位为十进制度
-2. **Declination (DEC)**：天体赤纬坐标，单位为十进制度
+- `TARGETID`：目标天体唯一标识。如果提供该列，系统会优先使用它匹配波段缓存文件。
 
-### 可选列信息
+示例：
 
-1. **TARGETID**：目标天体唯一标识。如果提供，系统将使用该 ID 匹配波段缓存文件
+| TARGETID | RA        | DEC     |
+|----------|-----------|---------|
+| 12345    | 150.12345 | 2.34567 |
+| 12346    | 150.23456 | 2.45678 |
+| 12347    | 150.34567 | 2.56789 |
 
-### 星表示例
+限制：
 
-下面是一个符合要求的简单星表示例（以 CSV 结构展示）：
+- 文件格式：FITS
+- 行数限制：最多支持 10,000 行
+- 文件大小：没有严格限制，但过大的星表会增加上传和处理时间
 
-| TARGETID | RA        | DEC       |
-|----------|-----------|-----------|
-| 12345    | 150.12345 | 2.34567   |
-| 12346    | 150.23456 | 2.45678   |
-| 12347    | 150.34567 | 2.56789   |
+## 波段缓存机制
 
-### 星表限制
+波段缓存用于保存已经完成的切图结果，避免相同目标在后续任务中重复处理。系统会将结果按波段分类保存到缓存目录中，后续任务如果命中缓存，可以直接复用已生成文件。
 
-- 文件大小：无严格限制，但文件过大可能导致处理时间变长
-- 行数限制：最多支持 10,000 行数据
+缓存目录示例：
 
-## 波段缓存功能
-
-### 缓存原理
-
-波段缓存是一种用于存储已处理图像裁剪结果的机制，可避免对相同目标进行重复处理。系统会将处理结果保存到按波段分类的目录中，下次处理相同目标时可直接复用缓存文件。
-
-### 缓存目录结构
-
-```
+```text
 /data/home/xiejh/Euclid_download/
-├── VIS/            # VIS 波段缓存文件
-├── NIR-Y/          # NIR-Y 波段缓存文件
-├── NIR-J/          # NIR-J 波段缓存文件
-├── NIR-H/          # NIR-H 波段缓存文件
-├── DES-G/          # DES-G 波段缓存文件
-├── DES-R/          # DES-R 波段缓存文件
-├── DES-I/          # DES-I 波段缓存文件
-├── DES-Z/          # DES-Z 波段缓存文件
-└── ...             # 其他波段
+|-- VIS/
+|-- NIR-Y/
+|-- NIR-J/
+|-- NIR-H/
+|-- DES-G/
+|-- DES-R/
+|-- DES-I/
+|-- DES-Z/
+`-- ...
 ```
 
-### 缓存检索规则
+缓存检索规则：
 
-系统按照以下规则检索缓存文件：
-1. 根据 TARGETID 匹配文件名中包含相同 ID 的文件
-2. 根据文件类型标识识别对应文件类型
-3. 通过缓存文件所在目录判断所属波段
+1. 根据 `TARGETID` 匹配文件名中包含相同 ID 的文件。
+2. 根据文件类型标识识别对应文件类型。
+3. 通过缓存文件所在目录判断所属波段。
 
-### 缓存优先级
+缓存优先级：
 
-1. 首先检查波段缓存目录中是否存在匹配文件
-2. 如果存在，则直接使用缓存文件以提高处理速度
-3. 如果不存在，则执行正常的图像裁剪流程
-4. 处理完成后，结果会自动备份到对应波段的缓存目录中
+1. 先检查波段缓存目录中是否存在匹配文件。
+2. 命中缓存时直接复用缓存文件。
+3. 未命中缓存时执行正常切图流程。
+4. 处理完成后将结果备份到对应波段缓存目录。
 
-## 后端 API 接口
+## 后端 API
 
-### 1. 文件上传
+### 上传文件
 
-```
+```http
 POST /api/upload_file
 Content-Type: multipart/form-data
-
-Parameters:
-- catalog: FITS format catalog file
 ```
 
-响应：
+参数：
+
+- `catalog`：FITS 格式星表文件
+
+响应示例：
+
 ```json
 {
   "success": true,
@@ -186,13 +324,16 @@ Parameters:
 }
 ```
 
-### 2. 提交任务
+### 提交任务
 
-```
+```http
 POST /api/submit_task
 Content-Type: application/json
+```
 
-Parameters:
+参数示例：
+
+```json
 {
   "temp_id": "temporary_file_id",
   "ra_col": "ra_column_name",
@@ -205,7 +346,8 @@ Parameters:
 }
 ```
 
-响应：
+响应示例：
+
 ```json
 {
   "success": true,
@@ -214,45 +356,51 @@ Parameters:
 }
 ```
 
-### 3. 获取任务状态
+### 查询任务状态
 
-```
+```http
 GET /api/task_status?task_id=task_id
 ```
 
-响应：
+响应示例：
+
 ```json
 {
   "task_id": "task_id",
-  "status": "completed", // queued, processing, completed, failed
+  "status": "completed",
   "progress": 100,
   "message": "Task processing completed",
   "result_url": "download_url"
 }
 ```
 
-## 常见问题与排查
+`status` 的常见取值包括 `queued`、`processing`、`completed` 和 `failed`。
+
+## 常见问题
 
 ### 文件上传失败
-- 确认上传文件为 FITS 格式
-- 检查文件大小，过大文件可能需要更长上传时间
+
+- 确认上传文件为 FITS 格式。
+- 检查文件大小，过大的文件可能需要更长上传时间。
 
 ### 任务处理失败
-- 检查星表格式是否正确，尤其是 RA 和 DEC 列
-- 确认所选仪器与波段组合有效
-- 查看服务器日志以获取详细错误信息
 
-### 缓存文件不匹配
-- 确认星表中包含正确的 TARGETID 列
-- 检查缓存文件命名是否符合规范，文件名中应包含 TARGETID
+- 检查星表格式是否正确，尤其是 RA 和 DEC 列。
+- 确认所选仪器和波段组合有效。
+- 查看服务端日志获取详细错误信息。
+
+### 缓存文件未匹配
+
+- 确认星表中包含正确的 `TARGETID` 列。
+- 检查缓存文件命名是否包含对应 `TARGETID`。
 
 ## 性能优化建议
 
-1. 当需要批量处理大量目标时，建议适当增加并行工作数（`n_workers`）
-2. 优先使用波段缓存机制，避免重复处理
-3. 对于经常处理的目标，建议提供 TARGETID 以提高缓存命中率
-4. 在正式处理前，先检查波段缓存目录中的已有缓存状态
+1. 批量处理大量目标时，可以适当增加并行工作数 `n_workers`。
+2. 优先使用波段缓存机制，减少重复切图。
+3. 对经常处理的目标，建议提供 `TARGETID` 以提高缓存命中率。
+4. 正式处理前，可以先检查缓存目录中已有文件状态。
 
 ## 技术支持
 
-如果你有任何问题或建议，请联系系统管理员。
+如有问题或建议，请联系项目维护者。

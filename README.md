@@ -18,7 +18,7 @@
 
 Euclid Image Cutout Service is a Flask-based web application for batch cropping astronomical images from Euclid and other astronomical datasets. The service supports uploading FITS format catalogs, automatically cropping images based on specified coordinates and parameters, and features a band caching mechanism to improve processing efficiency.
 
-Related work has been organized into a web tool, allowing users to access it online without local deployment.The service runs by default at [(https://nadc.china-vo.org/mwr/euclid-imagecutout/)]
+Related work has been organized into a web tool, allowing users to access it online without local deployment. The service is available at <https://nadc.china-vo.org/mwr/euclid-imagecutout/>.
 
 Key Features:
 - Batch upload FITS catalogs and process multiple celestial targets
@@ -27,6 +27,19 @@ Key Features:
 - Band caching mechanism to avoid repeated processing of the same targets
 - Task status tracking and result download
 - Parallel processing for improved efficiency
+
+## Euclid Data Workflow
+
+The complete workflow for Euclid raw data acquisition, FITS image reading, raw image visualization, and online image cutout usage has been organized in the Chinese guide:
+
+[Euclid 数据获取、原始图像读取与图像切割流程](./README_CN.md#euclid-原始数据获取流程)
+
+The workflow covers:
+
+- Euclid Q1 raw data access through the official Euclid release page and the National Astronomical Data Center science platform
+- FITS file reading from Linux directly or from Windows through SFTP
+- Downsampled visualization of large FITS images with `astropy`, `numpy`, and `matplotlib`
+- Online batch image cutout through the deployed NADC service
 
 ## Installation Instructions
 
