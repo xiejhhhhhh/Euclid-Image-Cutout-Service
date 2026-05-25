@@ -271,7 +271,7 @@ The Euclid data acquisition, raw image reading, and image cutout workflow is org
 
 - Jinhui Xie: <xiejinhui22@mails.ucas.ac.cn>
 - Hailing Lu: <luhl@nao.cas.cn>
-- Xu Li: <yananfeng2002@gmail.com>
+- Xu Li: <yananfeng2022@gmail.com>
 
 ## Technical Support
 
