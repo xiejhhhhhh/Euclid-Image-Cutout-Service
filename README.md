@@ -10,7 +10,7 @@
 
 # Euclid 图像切割服务使用指南
 
-[English](./README.md) | [中文](./README_CN.md)
+[English](./README_EN.md) | [中文](./README.md)
 
 </div>
 
