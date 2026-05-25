@@ -405,6 +405,7 @@ GET /api/task_status?task_id=task_id
 
 Euclid 数据获取、原始图像读取与图像切割流程由以下作者整理和维护：
 
+- 谢锦晖：<xiejinhui22@mails.ucas.ac.cn>
 - 陆海凌：<luhl@nao.cas.cn>
 - 李旭：<yananfeng2002@gmail.com>
 
