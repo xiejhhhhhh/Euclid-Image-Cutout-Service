@@ -401,6 +401,13 @@ GET /api/task_status?task_id=task_id
 3. 对经常处理的目标，建议提供 `TARGETID` 以提高缓存命中率。
 4. 正式处理前，可以先检查缓存目录中已有文件状态。
 
+## 作者信息
+
+Euclid 数据获取、原始图像读取与图像切割流程由以下作者整理和维护：
+
+- 陆海凌：<luhl@nao.cas.cn>
+- 李旭：<yananfeng2002@gmail.com>
+
 ## 技术支持
 
 如有问题或建议，请联系项目维护者。

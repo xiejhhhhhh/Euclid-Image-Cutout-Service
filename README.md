@@ -265,6 +265,13 @@ Response:
 3. For frequently processed targets, ensure TARGETID is provided to improve cache hit rate
 4. Check the status of existing cache files in the band cache directory before processing
 
+## Authors
+
+The Euclid data acquisition, raw image reading, and image cutout workflow is organized and maintained by:
+
+- Hailing Lu: <luhl@nao.cas.cn>
+- Xu Li: <yananfeng2002@gmail.com>
+
 ## Technical Support
 
 For any questions or suggestions, please contact the system administrator.
