@@ -407,7 +407,7 @@ Euclid 数据获取、原始图像读取与图像切割流程由以下作者整�
 
 - 谢锦晖：<xiejinhui22@mails.ucas.ac.cn>
 - 陆海凌：<luhl@nao.cas.cn>
-- 李旭：<yananfeng2002@gmail.com>
+- 李旭：<yananfeng2022@gmail.com>
 
 ## 技术支持
 
