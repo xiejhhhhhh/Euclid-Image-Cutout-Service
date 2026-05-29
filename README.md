@@ -8,7 +8,7 @@
 [![Parallel Processing](https://img.shields.io/badge/Parallel-Processing-E07A5F?style=flat-square)](#)
 [![Online Service](https://img.shields.io/badge/NADC-Online%20Service-1D7874?style=flat-square)](https://nadc.china-vo.org/mwr/euclid-imagecutout/)
 
-# Euclid 图像切割服务使用指南
+# Euclid 图像裁剪服务使用流程指南
 
 [English](./README_EN.md) | [中文](./README.md)
 
