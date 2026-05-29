@@ -140,8 +140,17 @@ def query_tile_id(ra: float, dec: float, tile_index_file: str,
 
 
 def _get_file_pattern(file_type: str) -> str:
-    """获取文件名匹配模式"""
+    """获取文件名匹配模式
+
+    支持用户友好的文件类型名称映射到实际的文件命名模式：
+    - SCI -> BGSUB (背景扣除后的科学图像)
+    - WHT -> FLAG (权重/标志图)
+    - RMS -> RMS (噪声图)
+    """
+    # 用户友好名称到实际文件模式的映射
     pattern_map = {
+        'SCI': 'BGSUB-MOSAIC',      # 科学图像
+        'WHT': 'MOSAIC',            # 权重图（使用FLAG文件）
         'BGSUB': 'BGSUB-MOSAIC',
         'BGMOD': 'BGMOD',
         'FLAG': 'MOSAIC',
@@ -171,18 +180,23 @@ def _get_instrument_prefix_map() -> Dict[str, str]:
 def _parse_filename(filename: str, file_type: str) -> Optional[Tuple[str, str]]:
     """
     从文件名解析仪器和波段
-    
+
     返回: (instrument, band) 或 None
     """
     try:
         notile = filename.split("_TILE")[0]
-        
-        if file_type in ['FLAG', 'RMS']:
-            inst_band = notile.split("EUC_MER_MOSAIC-")[-1].split(f"-{file_type}")[0]
+
+        # WHT映射到FLAG，需要使用FLAG的解析逻辑
+        actual_file_type = file_type
+        if file_type == 'WHT':
+            actual_file_type = 'FLAG'
+
+        if actual_file_type in ['FLAG', 'RMS']:
+            inst_band = notile.split("EUC_MER_MOSAIC-")[-1].split(f"-{actual_file_type}")[0]
         else:
             pattern = _get_file_pattern(file_type)
             inst_band = notile.split(f"EUC_MER_{pattern}-")[-1]
-        
+
         parts = inst_band.split('-')
         if len(parts) == 1:
             # 单通道仪器，如VIS
@@ -192,7 +206,7 @@ def _parse_filename(filename: str, file_type: str) -> Optional[Tuple[str, str]]:
             instrument = parts[0]
             band = '-'.join(parts[1:])
             return instrument, band
-            
+
     except Exception:
         return None
 
@@ -233,15 +247,36 @@ def find_files(tile_id: str, file_type: str, mer_root: str,
         search_pattern = f'EUC_MER_{pattern}'
         fits_files = [f for f in os.listdir(inst_path)
                      if search_pattern in f and f.endswith('.fits')]
-        
+
         # 过滤掉目录文件（如FINAL-CAT文件）
         filtered_files = []
         for fits_file in fits_files:
             # 跳过目录文件，这些文件不应该被当作图像文件处理
             if 'FINAL-CAT' in fits_file:
                 continue
+
+            # 根据file_type进行更精确的过滤
+            # WHT -> FLAG文件（包含-FLAG）
+            # RMS -> RMS文件（包含-RMS）
+            # SCI -> BGSUB文件（包含BGSUB）
+            if file_type == 'WHT':
+                if '-FLAG' not in fits_file:
+                    continue
+            elif file_type == 'RMS':
+                if '-RMS' not in fits_file:
+                    continue
+            elif file_type == 'SCI':
+                if 'BGSUB' not in fits_file:
+                    continue
+            elif file_type == 'FLAG':
+                if '-FLAG' not in fits_file:
+                    continue
+            elif file_type == 'BGSUB':
+                if 'BGSUB' not in fits_file:
+                    continue
+
             filtered_files.append(fits_file)
-        
+
         fits_files = filtered_files
         
         for fits_file in fits_files:
@@ -671,33 +706,42 @@ def _process_single_source(source, source_index, output_dir, config):
 
 def _process_single_source_parallel(args):
     """单个源的处理函数，用于并行处理"""
-    (idx, row, ra_col, dec_col, size_col, obj_id_col, file_types, 
-     output_dir, mer_root, instruments, bands, 
-     skip_nan, default_size, save_catalog_row, verbose) = args
-    
-    ra = row[ra_col]
-    dec = row[dec_col]
-    
-    if size_col is not None and size_col in row.colnames:
-        size = row[size_col]
-        if isinstance(size, (list, tuple, np.ndarray)) and len(size) == 2:
-            size = tuple(size)
-    else:
-        size = default_size
-    
-    # 确保obj_id是字符串类型，避免MaskedConstant导致的哈希错误
-    if obj_id_col:
-        raw_obj_id = row[obj_id_col]
-        # 检查是否为MaskedConstant类型或其他特殊类型
-        if hasattr(raw_obj_id, 'mask'):  # MaskedConstant类型
-            obj_id = f"ra_{ra:.6f}_dec_{dec:.6f}"  # 如果是掩码值，使用RA/Dec作为备用ID
+    try:
+        (idx, row_dict, ra_col, dec_col, size_col, obj_id_col, file_types,
+         output_dir, mer_root, instruments, bands,
+         skip_nan, default_size, save_catalog_row, verbose) = args
+
+        ra = row_dict[ra_col]
+        dec = row_dict[dec_col]
+
+        if size_col is not None and size_col in row_dict:
+            size = row_dict[size_col]
+            if isinstance(size, (list, tuple, np.ndarray)) and len(size) == 2:
+                size = tuple(size)
         else:
-            obj_id = str(raw_obj_id)  # 转换为字符串
-    else:
-        obj_id = f"ra_{ra:.6f}_dec_{dec:.6f}"  # 使用RA/Dec作为ID
-    
-    # 直接从row中获取TILE_ID（已在process_catalog中预处理）
-    tile_id = row['TILE_ID']
+            size = default_size
+
+        # 确保obj_id是字符串类型，避免MaskedConstant导致的哈希错误
+        if obj_id_col:
+            raw_obj_id = row_dict[obj_id_col]
+            # 检查是否为MaskedConstant类型或其他特殊类型
+            if hasattr(raw_obj_id, 'mask'):  # MaskedConstant类型
+                obj_id = f"ra_{ra:.6f}_dec_{dec:.6f}"  # 如果是掩码值，使用RA/Dec作为备用ID
+            else:
+                obj_id = str(raw_obj_id)  # 转换为字符串
+        else:
+            obj_id = f"ra_{ra:.6f}_dec_{dec:.6f}"  # 使用RA/Dec作为ID
+
+        # 直接从row_dict中获取TILE_ID（已在process_catalog中预处理）
+        # Note: all keys are lowercase now
+        tile_id = row_dict['tile_id']
+    except Exception as e:
+        import traceback
+        print(f"\n[ERROR] 解析参数时出错: {str(e)}", file=sys.stderr)
+        print(f"row_dict keys: {list(row_dict.keys()) if isinstance(row_dict, dict) else 'NOT A DICT'}", file=sys.stderr)
+        print(f"ra_col: {ra_col}, dec_col: {dec_col}, obj_id_col: {obj_id_col}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        raise
     
     # 如果TILE_ID为空字符串，说明无法匹配
     if not tile_id or tile_id == '':
@@ -723,9 +767,15 @@ def _process_single_source_parallel(args):
             if cutout_result['success']:
                 file_output_dir = os.path.join(output_dir, file_type)
                 output_path = os.path.join(file_output_dir, f"{obj_id}.fits")
-                
-                save_row = row if (save_catalog_row and file_type == file_types[0]) else None
-                
+
+                # Convert dict back to Table Row for saving if needed
+                save_row = None
+                if save_catalog_row and file_type == file_types[0]:
+                    # Create a single-row Table from the dict
+                    from astropy.table import Table
+                    temp_table = Table({k: [v] for k, v in row_dict.items()})
+                    save_row = temp_table[0]
+
                 success = save_cutouts(
                     output_path=output_path,
                     cutouts_result=cutout_result,
@@ -1002,7 +1052,7 @@ def process_catalog(catalog: Table, output_dir: str, file_types: List[str],
                     ra_col: str = 'RA', dec_col: str = 'DEC',
                     size_col: Optional[str] = None, obj_id_col: Optional[str] = None,
                     size: Union[int, Tuple] = 128,
-                    tile_index_file: str = 'tile_coordinates.fits',
+                    tile_index_file: str = 'data/EuclidQ1_tile_coordinates.fits',
                     mer_root: str = '/data/astrodata/mirror/102042-Euclid-Q1/MER',
                     instruments: Optional[List[str]] = None, bands: Optional[List[str]] = None,
                     skip_nan: bool = True, save_catalog_row: bool = True,
@@ -1060,8 +1110,14 @@ def process_catalog(catalog: Table, output_dir: str, file_types: List[str],
     
     stats = {ft: {'success': 0, 'failed': 0, 'errors': []} for ft in file_types}
     
+    # Convert rows to dicts for better serialization in multiprocessing
+    # Also normalize column names to lowercase for case-insensitive access
     args_list = [
-        (idx, row, ra_col, dec_col, size_col, obj_id_col, file_types,
+        (idx, {col.lower(): row[col] for col in row.colnames},
+         ra_col.lower(), dec_col.lower(),
+         size_col.lower() if size_col else None,
+         obj_id_col.lower() if obj_id_col else None,
+         file_types,
          output_dir, mer_root, instruments, bands,
          skip_nan, size, save_catalog_row, verbose)
         for idx, row in enumerate(catalog_with_tile)
@@ -1089,7 +1145,10 @@ def process_catalog(catalog: Table, output_dir: str, file_types: List[str],
                                 stats[file_type]['errors'].append(f"{obj_id}: {status}")
                 except Exception as e:
                     if verbose:
+                        import traceback
                         print(f"\n[CRITICAL ERROR] 处理任务时出错: {str(e)}", file=sys.stderr)
+                        print(f"详细错误信息:", file=sys.stderr)
+                        traceback.print_exc(file=sys.stderr)
                     for file_type in file_types:
                         stats[file_type]['failed'] += 1
                 

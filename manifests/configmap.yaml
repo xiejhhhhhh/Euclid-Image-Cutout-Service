@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: euclid-cutout-config
+  labels:
+    app: euclid-cutout-service
+data:
+  config.yaml: |
+    # Euclid Image Cutout Service Configuration
+
+    # 数据路径配置
+    data:
+      root: "/data/euclid"
+      catalog_dir: "${data.root}/catalogs"
+      mer_root: "${data.root}/MER"
+      image_dirs:
+        - "${data.root}/VIS"
+        - "${data.root}/NIR"
+        - "${data.root}/MER"
+
+    # 工作目录配置
+    workspace:
+      upload_dir: "/app/tmp"
+      output_dir: "/app/outputs"
+      cache_dir: "/app/cache"
+      tmp_dir: "/app/tmp"
+      permanent_download_dir: "/app/outputs/downloads"
+
+    # 处理限制
+    limits:
+      max_catalog_rows: 10000
+      max_workers: 16
+      default_workers: 4
+      max_task_age_days: 30
+
+    # 缓存配置
+    cache:
+      enabled: true
+      max_size_gb: 100
+      cleanup_threshold_gb: 90
+      auto_cleanup: true
+
+    # 日志配置
+    logging:
+      level: "INFO"
+      dir: "/app/logs"
+      max_file_size_mb: 100
+      backup_count: 10
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    # Flask配置
+    flask:
+      host: "0.0.0.0"
+      port: 5000
+      debug: false
+      cors_enabled: true
+      cors_origins: "*"
+
+    # MCP配置
+    mcp:
+      server_name: "euclid-cutout-service"
+      version: "1.0.0"
+      transport: "sse"
+      port: 8000
+      host: "0.0.0.0"
+      max_concurrent_tasks: 5
+
+    # PyTorch配置
+    pytorch:
+      device: "cpu"
+      num_threads: 4

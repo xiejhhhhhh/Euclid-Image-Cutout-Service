@@ -8,4 +8,4 @@ torchvision
 matplotlib
 pillow
 pyyaml
-
+tqdm

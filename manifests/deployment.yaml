@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: euclid-cutout-service
+  labels:
+    app: euclid-cutout-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: euclid-cutout-service
+  template:
+    metadata:
+      labels:
+        app: euclid-cutout-service
+    spec:
+      containers:
+      - name: euclid-cutout
+        image: harbor.zhejianglab.com/ayb-dev/euclid-cutout-service:v20260126r1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: flask
+          containerPort: 5000
+          protocol: TCP
+        - name: mcp-sse
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONPATH
+          value: "/app"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: data
+          mountPath: /data/euclid
+          readOnly: true  # 数据只读
+        - name: outputs
+          mountPath: /app/outputs
+        - name: cache
+          mountPath: /app/cache
+        - name: tmp
+          mountPath: /app/tmp
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: config
+        configMap:
+          name: euclid-cutout-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: euclid-data-pvc
+      - name: outputs
+        persistentVolumeClaim:
+          claimName: euclid-outputs-pvc
+      - name: cache
+        persistentVolumeClaim:
+          claimName: euclid-cache-pvc
+      - name: tmp
+        persistentVolumeClaim:
+          claimName: euclid-tmp-pvc
+      restartPolicy: Always

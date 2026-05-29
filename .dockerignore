@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Test
+test/
+*.test
+*.spec
+
+# Cache and temporary files
+cache/
+tmp/
+*.log
+*.tmp
+
+# Outputs (will be mounted as volume)
+outputs/
+
+# Claude
+.claude/
+
+# Other
+*.bak
+*.orig
